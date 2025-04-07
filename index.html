@@ -2,127 +2,232 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fakebook</title>
-  <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; background: #f0f2f5; }
-    header { background: #1877f2; color: white; padding: 1rem; text-align: center; }
-    #loginPage, #mainPage { display: none; max-width: 600px; margin: auto; padding: 1rem; background: white; }
-    .post { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; background: #fff; border-radius: 8px; }
-    .post img { max-width: 100%; margin-top: 0.5rem; }
-    .comment { margin-left: 1rem; color: #555; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fakebook - Post & Share</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js"></script>
 </head>
 <body>
 
-<header>
-  <h1>Folbick</h1>
-</header>
+  <div>
+    <input type="text" id="postText" placeholder="Write your post">
+    <input type="file" id="postImageFile">
+    <button onclick="createPost()">Post</button>
+  </div>
 
-<div id="loginPage">
-  <h2>Login</h2>
-  <input id="username" placeholder="Username"><br><br>
-  <input id="password" type="password" placeholder="Password"><br><br>
-  <button onclick="login()">Login</button>
-</div>
-
-<div id="mainPage">
-  <h3>Welcome, <span id="userDisplay"></span></h3>
-  <textarea id="postText" placeholder="What's on your mind?" rows="3" style="width:100%;"></textarea><br>
-  <input id="postImage" placeholder="Image URL (optional)" style="width:100%;"><br>
-  <button onclick="createPost()">Post</button>
-  <hr>
   <div id="feed"></div>
-</div>
 
-<script>
-  let user = localStorage.getItem('user');
-  let posts = JSON.parse(localStorage.getItem('posts') || '[]');
-  let likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrCU_DqVWiLecR5ifGhtcNYfx6jR16TxQ",
+      authDomain: "folbick-246da.firebaseapp.com",
+      databaseURL: "https://console.firebase.google.com/u/0/project/folbick-246da/settings/general/web:NmJjMWI1MTktOTBjNC00N2UyLWIxZTEtNjYzNTY1Yzk3YmY3.firebaseio.com",
+      projectId: "folbick-246da",
+      storageBucket: "folbick-246da.firebasestorage.app",
+      messagingSenderId: "1023736238540",
+      appId: "1:1023736238540:web:8cbb821408f50d250d0d69"
+    };
 
-  function savePosts() {
-    localStorage.setItem('posts', JSON.stringify(posts));
-  }
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const storage = firebase.storage();
 
-  function saveLikes() {
-    localStorage.setItem('liked_' + user, JSON.stringify(likedPosts));
-  }
-
-  function login() {
-    const u = document.getElementById('username').value;
-    const p = document.getElementById('password').value;
-    if (u && p) {
-      user = u;
-      localStorage.setItem('user', user);
-      likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
-      showMain();
-    }
-  }
-
-  function showMain() {
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('mainPage').style.display = 'block';
-    document.getElementById('userDisplay').innerText = user;
-    renderPosts();
-  }
-
-  function createPost() {
-    const text = document.getElementById('postText').value;
-    const img = document.getElementById('postImage').value;
-    if (text || img) {
-      posts.unshift({ user, text, img, likes: 0, comments: [] });
-      savePosts();
-      renderPosts();
-      document.getElementById('postText').value = '';
-      document.getElementById('postImage').value = '';
-    }
-  }
-
-  function renderPosts() {
+    const postText = document.getElementById('postText');
+    const postImageFile = document.getElementById('postImageFile');
     const feed = document.getElementById('feed');
-    feed.innerHTML = '';
-    posts.forEach((post, i) => {
-      const liked = likedPosts.includes(i);
-      const div = document.createElement('div');
-      div.className = 'post';
-      div.innerHTML = `
-        <b>${post.user}</b><br>${post.text}
-        ${post.img ? `<img src="${post.img}">` : ''}
-        <br>
-        <button onclick="like(${i})" ${liked ? 'disabled' : ''}>Like (${post.likes})</button>
-        <input id="c${i}" placeholder="Comment">
-        <button onclick="comment(${i})">Comment</button>
-        ${post.comments.map(c => `<div class="comment">${c}</div>`).join('')}
-      `;
-      feed.appendChild(div);
-    });
-  }
 
-  function like(i) {
-    if (!likedPosts.includes(i)) {
-      posts[i].likes++;
-      likedPosts.push(i);
-      savePosts();
-      saveLikes();
+    function createPost() {
+      const text = postText.value;
+      const file = postImageFile.files[0];
+
+      if (!text && !file) return;
+
+      // Upload the file to Firebase Storage if available
+      if (file) {
+        const storageRef = storage.ref('images/' + file.name);
+        storageRef.put(file).then(snapshot => {
+          snapshot.ref.getDownloadURL().then(url => {
+            savePost(text, url);
+          });
+        });
+      } else {
+        savePost(text, null);
+      }
+    }
+
+    function savePost(text, imgURL) {
+      const newPostRef = db.ref('posts').push();
+      newPostRef.set({
+        text: text,
+        img: imgURL,
+        likes: 0,
+        comments: []
+      });
       renderPosts();
     }
-  }
 
-  function comment(i) {
-    const cmt = document.getElementById('c' + i).value;
-    if (cmt) {
-      posts[i].comments.push(`${user}: ${cmt}`);
-      savePosts();
-      renderPosts();
+    function renderPosts() {
+      db.ref('posts').on('value', snapshot => {
+        const posts = snapshot.val();
+        feed.innerHTML = '';
+        for (const postId in posts) {
+          const post = posts[postId];
+          const div = document.createElement('div');
+          div.className = 'post';
+          div.innerHTML = `
+            <div>${post.text}</div>
+            ${post.img ? `<img src="${post.img}" width="300px">` : ''}
+            <br>
+            <button onclick="likePost('${postId}')">Like (${post.likes})</button>
+            <input placeholder="Comment">
+            <button onclick="commentPost('${postId}')">Comment</button>
+            <div class="comments">${post.comments.join('<br>')}</div>
+          `;
+          feed.appendChild(div);
+        }
+      });
     }
-  }
 
-  if (user) {
-    likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
-    showMain();
-  } else {
-    document.getElementById('loginPage').style.display = 'block';
-  }
-</script>
+    function likePost(postId) {
+      const postRef = db.ref('posts/' + postId);
+      postRef.once('value').then(snapshot => {
+        const post = snapshot.val();
+        postRef.update({ likes: post.likes + 1 });
+      });
+    }
+
+    function commentPost(postId) {
+      const commentText = document.querySelector(`#commentText${postId}`).value;
+      const postRef = db.ref('posts/' + postId);
+      postRef.once('value').then(snapshot => {
+        const post = snapshot.val();
+        postRef.update({
+          comments: [...post.comments, commentText]
+        });
+      });
+    }
+
+    renderPosts();
+  </script>
 
 </body>
-</html>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fakebook - Post & Share</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js"></script>
+</head>
+<body>
+
+  <div>
+    <input type="text" id="postText" placeholder="Write your post">
+    <input type="file" id="postImageFile">
+    <button onclick="createPost()">Post</button>
+  </div>
+
+  <div id="feed"></div>
+
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrCU_DqVWiLecR5ifGhtcNYfx6jR16TxQ",
+      authDomain: "folbick-246da.firebaseapp.com",
+      databaseURL: "https://console.firebase.google.com/u/0/project/folbick-246da/settings/general/web:NmJjMWI1MTktOTBjNC00N2UyLWIxZTEtNjYzNTY1Yzk3YmY3.firebaseio.com",
+      projectId: "folbick-246da",
+      storageBucket: "folbick-246da.firebasestorage.app",
+      messagingSenderId: "1023736238540",
+      appId: "1:1023736238540:web:8cbb821408f50d250d0d69"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const storage = firebase.storage();
+
+    const postText = document.getElementById('postText');
+    const postImageFile = document.getElementById('postImageFile');
+    const feed = document.getElementById('feed');
+
+    function createPost() {
+      const text = postText.value;
+      const file = postImageFile.files[0];
+
+      if (!text && !file) return;
+
+      // Upload the file to Firebase Storage if available
+      if (file) {
+        const storageRef = storage.ref('images/' + file.name);
+        storageRef.put(file).then(snapshot => {
+          snapshot.ref.getDownloadURL().then(url => {
+            savePost(text, url);
+          });
+        });
+      } else {
+        savePost(text, null);
+      }
+    }
+
+    function savePost(text, imgURL) {
+      const newPostRef = db.ref('posts').push();
+      newPostRef.set({
+        text: text,
+        img: imgURL,
+        likes: 0,
+        comments: []
+      });
+      renderPosts();
+    }
+
+    function renderPosts() {
+      db.ref('posts').on('value', snapshot => {
+        const posts = snapshot.val();
+        feed.innerHTML = '';
+        for (const postId in posts) {
+          const post = posts[postId];
+          const div = document.createElement('div');
+          div.className = 'post';
+          div.innerHTML = `
+            <div>${post.text}</div>
+            ${post.img ? `<img src="${post.img}" width="300px">` : ''}
+            <br>
+            <button onclick="likePost('${postId}')">Like (${post.likes})</button>
+            <input placeholder="Comment">
+            <button onclick="commentPost('${postId}')">Comment</button>
+            <div class="comments">${post.comments.join('<br>')}</div>
+          `;
+          feed.appendChild(div);
+        }
+      });
+    }
+
+    function likePost(postId) {
+      const postRef = db.ref('posts/' + postId);
+      postRef.once('value').then(snapshot => {
+        const post = snapshot.val();
+        postRef.update({ likes: post.likes + 1 });
+      });
+    }
+
+    function commentPost(postId) {
+      const commentText = document.querySelector(`#commentText${postId}`).value;
+      const postRef = db.ref('posts/' + postId);
+      postRef.once('value').then(snapshot => {
+        const post = snapshot.val();
+        postRef.update({
+          comments: [...post.comments, commentText]
+        });
+      });
+    }
+
+    renderPosts();
+  </script>
+
+</body>
+</html></html>
