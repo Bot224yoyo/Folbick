@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fakebook</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f0f2f5; }
+    header { background: #1877f2; color: white; padding: 1rem; text-align: center; }
+    #loginPage, #mainPage { display: none; max-width: 600px; margin: auto; padding: 1rem; background: white; }
+    .post { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; background: #fff; border-radius: 8px; }
+    .post img { max-width: 100%; margin-top: 0.5rem; }
+    .comment { margin-left: 1rem; color: #555; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Folbick</h1>
+</header>
+
+<div id="loginPage">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username"><br><br>
+  <input id="password" type="password" placeholder="Password"><br><br>
+  <button onclick="login()">Login</button>
+</div>
+
+<div id="mainPage">
+  <h3>Welcome, <span id="userDisplay"></span></h3>
+  <textarea id="postText" placeholder="What's on your mind?" rows="3" style="width:100%;"></textarea><br>
+  <input id="postImage" placeholder="Image URL (optional)" style="width:100%;"><br>
+  <button onclick="createPost()">Post</button>
+  <hr>
+  <div id="feed"></div>
+</div>
+
+<script>
+  let user = localStorage.getItem('user');
+  let posts = JSON.parse(localStorage.getItem('posts') || '[]');
+  let likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
+
+  function savePosts() {
+    localStorage.setItem('posts', JSON.stringify(posts));
+  }
+
+  function saveLikes() {
+    localStorage.setItem('liked_' + user, JSON.stringify(likedPosts));
+  }
+
+  function login() {
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+    if (u && p) {
+      user = u;
+      localStorage.setItem('user', user);
+      likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
+      showMain();
+    }
+  }
+
+  function showMain() {
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('mainPage').style.display = 'block';
+    document.getElementById('userDisplay').innerText = user;
+    renderPosts();
+  }
+
+  function createPost() {
+    const text = document.getElementById('postText').value;
+    const img = document.getElementById('postImage').value;
+    if (text || img) {
+      posts.unshift({ user, text, img, likes: 0, comments: [] });
+      savePosts();
+      renderPosts();
+      document.getElementById('postText').value = '';
+      document.getElementById('postImage').value = '';
+    }
+  }
+
+  function renderPosts() {
+    const feed = document.getElementById('feed');
+    feed.innerHTML = '';
+    posts.forEach((post, i) => {
+      const liked = likedPosts.includes(i);
+      const div = document.createElement('div');
+      div.className = 'post';
+      div.innerHTML = `
+        <b>${post.user}</b><br>${post.text}
+        ${post.img ? `<img src="${post.img}">` : ''}
+        <br>
+        <button onclick="like(${i})" ${liked ? 'disabled' : ''}>Like (${post.likes})</button>
+        <input id="c${i}" placeholder="Comment">
+        <button onclick="comment(${i})">Comment</button>
+        ${post.comments.map(c => `<div class="comment">${c}</div>`).join('')}
+      `;
+      feed.appendChild(div);
+    });
+  }
+
+  function like(i) {
+    if (!likedPosts.includes(i)) {
+      posts[i].likes++;
+      likedPosts.push(i);
+      savePosts();
+      saveLikes();
+      renderPosts();
+    }
+  }
+
+  function comment(i) {
+    const cmt = document.getElementById('c' + i).value;
+    if (cmt) {
+      posts[i].comments.push(`${user}: ${cmt}`);
+      savePosts();
+      renderPosts();
+    }
+  }
+
+  if (user) {
+    likedPosts = JSON.parse(localStorage.getItem('liked_' + user) || '[]');
+    showMain();
+  } else {
+    document.getElementById('loginPage').style.display = 'block';
+  }
+</script>
+
+</body>
+</html>
